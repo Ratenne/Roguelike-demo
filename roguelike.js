@@ -1,5 +1,5 @@
 // ============================================
-// 로그라이크 게임 - 메인 로직
+// 로그라이크 게임 - 메인 로직 (버그 수정)
 // ============================================
 
 const game = new GameEngine('gameCanvas', {
@@ -26,11 +26,11 @@ let lastTimestamp = 0;
 let hasBossInFloor = false;
 let bossDefeated = false;
 
-// 마우스 위치 추적 (skills.js에서 사용)
-canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+// 마우스 위치 추적 (game.canvas로 올바르게 참조)
+game.canvas.addEventListener('mousemove', (e) => {
+    const rect = game.canvas.getBoundingClientRect();
+    const scaleX = game.canvas.width / rect.width;
+    const scaleY = game.canvas.height / rect.height;
     mouseX = (e.clientX - rect.left) * scaleX;
     mouseY = (e.clientY - rect.top) * scaleY;
 });
@@ -57,7 +57,6 @@ function generateFloor(floorNum) {
     spawnEnemies(floorNum, worldSize, game.entities);
     spawnBoss(floorNum, worldSize, game.entities);
     
-    // 보스 존재 여부 확인
     hasBossInFloor = game.entities.enemies.some(e => e.type === 'boss');
     bossDefeated = false;
     
@@ -92,7 +91,6 @@ function generateFloor(floorNum) {
     showFloatingMessage(`🏰 ${floorNum}층 - 입장!`, "#ffaa88");
 }
 
-
 // ========== 다음 층 이동 ==========
 function goToNextFloor() {
     if (timeEventActive) {
@@ -109,7 +107,10 @@ function goToNextFloor() {
 
 // ========== 게임 오버 ==========
 function gameOver() {
+    if (!game.gameRunning) return; // 중복 호출 방지
     game.gameRunning = false;
+    soundEngine.playGameOver();
+    soundEngine.stopMusic();
     document.getElementById('finalStats').innerHTML = 
         `최종 층: ${currentFloor} | 처치: ${game.player.killCount} | 점수: ${Math.floor(game.score)}`;
     document.getElementById('gameOverPanel').style.display = 'block';
@@ -140,6 +141,7 @@ function restartGame() {
     };
     currentPet = null;
     clearAllEnemyStates();
+    playerCharacter.resetDeath();
     
     game.player = {
         x: 0, y: 0, vx: 0, vy: 0,
@@ -155,7 +157,6 @@ function restartGame() {
     
     document.getElementById('gameOverPanel').style.display = 'none';
     
-    // 음악 재시작
     soundEngine.stopMusic();
     
     generateFloor(1);
@@ -165,7 +166,6 @@ function restartGame() {
 // ========== 엔진 콜백 등록 ==========
 
 // 업데이트 콜백
-// onUpdate 콜백 내 적 AI 부분 수정
 game.on('onUpdate', (engine) => {
     if (isLevelUpMenuOpen || !engine.gameRunning) return;
     
@@ -176,12 +176,14 @@ game.on('onUpdate', (engine) => {
     const enemies = engine.entities.enemies;
     const player = engine.player;
     
+    // 이펙트 업데이트
     updateEffects(deltaTime);
     
+    // 특수 스킬 쿨다운
     if (specialAttackCooldown > 0) specialAttackCooldown--;
     
     // 지속 효과 업데이트
-    for (let i = 0; i < activeEffects.length; i++) {
+    for (let i = activeEffects.length - 1; i >= 0; i--) {
         const effect = activeEffects[i];
         effect.duration -= deltaTime;
         
@@ -200,10 +202,10 @@ game.on('onUpdate', (engine) => {
                 player.moveSpeed = effect.originalSpeed;
             }
             activeEffects.splice(i, 1);
-            i--;
         }
     }
     
+    // 시간 제한 이벤트
     if (timeEventActive) {
         timeEventRemaining--;
         if (timeEventRemaining <= 0) {
@@ -212,14 +214,16 @@ game.on('onUpdate', (engine) => {
         }
     }
     
+    // 적 AI 업데이트
     updateEnemyAI(player, enemies, engine.worldWidth, engine.worldHeight, engine, deltaTime);
     
+    // 플레이어 사망 체크
     if (player.hp <= 0) {
         gameOver();
         return;
     }
     
-    // 일반 공격
+    // 일반 공격 처리
     engine.updateAttack(
         enemies,
         (p, e) => Math.hypot(p.x - e.x, p.y - e.y),
@@ -239,17 +243,20 @@ game.on('onUpdate', (engine) => {
             
             enemy.hp -= damage;
             
+            // 생명력 흡수
             if (passiveBonuses.lifeSteal > 0) {
                 const healAmount = damage * passiveBonuses.lifeSteal;
                 player.hp = Math.min(player.maxHp, player.hp + healAmount);
             }
             
+            // 적 처치 처리
             if (enemy.hp <= 0) {
                 const wasBoss = enemy.type === 'boss';
+                const expGain = Math.floor(enemy.exp * (1 + passiveBonuses.expBonus));
+                
                 removeEnemyState(enemy);
                 engine.entities.enemies.splice(index, 1);
                 player.killCount++;
-                const expGain = Math.floor(enemy.exp * (1 + passiveBonuses.expBonus));
                 engine.addExp(expGain);
                 engine.addScore(50);
                 
@@ -266,19 +273,23 @@ game.on('onUpdate', (engine) => {
         }
     );
     
-    // 펫 공격
+    // 펫 공격 처리
     if (currentPet) {
         const result = currentPet.update(player, enemies);
-        if (result.hit) {
+        if (result.hit && result.target) {
             soundEngine.playPetAttack();
+            
+            // 대상이 죽었는지 확인 (hp가 0 이하인 경우)
             if (result.target.hp <= 0) {
                 const idx = enemies.indexOf(result.target);
                 if (idx !== -1) {
                     const wasBoss = result.target.type === 'boss';
+                    const expGain = result.target.exp; // splice 전에 참조
+                    
                     removeEnemyState(result.target);
                     enemies.splice(idx, 1);
                     player.killCount++;
-                    game.addExp(result.target.exp);
+                    game.addExp(expGain);
                     
                     if (wasBoss) {
                         soundEngine.playBossKill();
@@ -287,17 +298,20 @@ game.on('onUpdate', (engine) => {
                     } else {
                         soundEngine.playEnemyKill();
                     }
+                    showFloatingMessage(`🐾 ${Math.floor(result.damage)} 데미지!`, "#88ffaa");
                 }
-                showFloatingMessage(`🐾 ${Math.floor(result.damage)} 데미지!`, "#88ffaa");
             }
         }
     }
     
-    // 상호작용 오브젝트
+    // 상호작용 오브젝트 처리
     if (engine.entities.interactive) {
-        for (let obj of engine.entities.interactive) {
+        for (let i = 0; i < engine.entities.interactive.length; i++) {
+            const obj = engine.entities.interactive[i];
+            if (obj.used) continue;
+            
             const dist = Math.hypot(player.x - obj.x, player.y - obj.y);
-            if (dist < player.size/2 + obj.size/2 && !obj.used) {
+            if (dist < player.size/2 + obj.size/2) {
                 const result = interactWithObject(obj, game, activeEffects, mana, maxMana);
                 mana = result.mana;
                 
@@ -316,8 +330,8 @@ game.on('onUpdate', (engine) => {
         }
     }
     
-    // 아이템 획득
-    for (let i = 0; i < engine.entities.powerups.length; i++) {
+    // 아이템 획득 처리
+    for (let i = engine.entities.powerups.length - 1; i >= 0; i--) {
         const p = engine.entities.powerups[i];
         const dist = Math.hypot(player.x - p.x, player.y - p.y);
         
@@ -325,7 +339,6 @@ game.on('onUpdate', (engine) => {
             const result = pickupItem(p, game, mana, maxMana);
             mana = result.mana;
             engine.entities.powerups.splice(i, 1);
-            i--;
             soundEngine.playItemPickup();
         }
     }
@@ -335,9 +348,11 @@ game.on('onUpdate', (engine) => {
         goToNextFloor();
     }
     
+    // 자연 회복
     engine.addExp(0.02);
     mana = Math.min(maxMana, mana + 0.15);
     
+    // 플로팅 메시지 타이머
     if (floatingMessage.timer > 0) {
         floatingMessage.timer -= deltaTime;
     }
@@ -347,20 +362,24 @@ game.on('onUpdate', (engine) => {
 game.on('onRender', (engine) => {
     const ctx = engine.ctx;
     
+    // 이펙트 렌더링
     renderEffects(ctx, engine.camera);
+    
+    // 상호작용 오브젝트 렌더링
     renderInteractiveObjects(ctx, engine.entities.interactive, engine);
     
-    // 적 렌더링 (새 스프라이트 시스템 사용)
+    // 적 렌더링 (벡터 렌더러 사용)
     for (let e of engine.entities.enemies) {
         enemyRenderer.render(ctx, e, engine);
     }
     
-    renderEffects(ctx, engine.camera);
-    renderInteractiveObjects(ctx, engine.entities.interactive, engine);
-    renderEnemies(ctx, engine.entities.enemies, engine);
+    // 아이템 렌더링
     renderItems(ctx, engine.entities.powerups, engine);
+    
+    // 마우스 방향선
     drawMouseDirection(ctx, engine, game, mouseX, mouseY);
     
+    // 펫 렌더링
     if (currentPet) {
         const screen = engine.worldToScreen(currentPet.x, currentPet.y);
         ctx.font = "26px monospace";
@@ -374,6 +393,7 @@ game.on('onRender', (engine) => {
     // 던전 장식 렌더링
     renderDungeonDecorations(ctx, engine, engine.entities.wallDecorations);
     
+    // UI 렌더링
     drawSkillUI(ctx, engine, activeSkills, mana, maxMana, specialAttackCooldown);
     drawPetInfo(ctx, engine, currentPet);
     drawActiveEffects(ctx, engine, activeEffects);
@@ -410,7 +430,6 @@ window.addEventListener('keydown', (e) => {
         specialAttackCooldown = result.specialAttackCooldown;
         
         if (result.success) {
-            // 스킬별 사운드
             switch(skill.id) {
                 case 'FIREBALL': soundEngine.playFireball(); break;
                 case 'ICE_SHARD': soundEngine.playIceShard(); break;
@@ -429,16 +448,6 @@ window.addEventListener('keydown', (e) => {
         showFloatingMessage(muted ? '🔇 음소거' : '🔊 소리 켜짐', "#aaaaaa");
     }
 });
-
-// 게임 오버
-function gameOver() {
-    game.gameRunning = false;
-    soundEngine.playGameOver();
-    soundEngine.stopMusic();
-    document.getElementById('finalStats').innerHTML = 
-        `최종 층: ${currentFloor} | 처치: ${game.player.killCount} | 점수: ${Math.floor(game.score)}`;
-    document.getElementById('gameOverPanel').style.display = 'block';
-}
 
 // ========== 초기화 ==========
 
