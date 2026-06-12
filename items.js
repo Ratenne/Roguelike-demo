@@ -2,31 +2,44 @@
 // 아이템 & 상호작용 오브젝트
 // ============================================
 
-// ========== 장애물 생성 ==========
-function spawnObstacles(worldSize, entities) {
-    const obstacleCount = 20 + Math.floor(Math.random() * 15);
-    for (let i = 0; i < obstacleCount; i++) {
-        entities.obstacles.push({
-            x: 60 + Math.random() * (worldSize - 120),
-            y: 60 + Math.random() * (worldSize - 120),
-            w: 16 + Math.random() * 18,
-            h: 16 + Math.random() * 18,
-            type: Math.random() > 0.6 ? 'rock' : 'tree'
-        });
-    }
+// ========== 장애물 생성 (던전 기반으로 교체) ==========
+function spawnObstacles(worldSize, entities, floorNum) {
+    // BSP + CA 던전 생성
+    const dungeonData = generateDungeon(worldSize, worldSize, floorNum);
+    
+    // 장애물 및 구조물 정보 저장
+    spawnObstaclesFromDungeon(entities, dungeonData);
+    
+    return dungeonData; // 방 정보 반환 (적/아이템 배치에 사용)
 }
 
-// ========== 상호작용 오브젝트 생성 ==========
+// ========== 상호작용 오브젝트 생성 (방 기반 배치) ==========
 function spawnInteractiveObjects(floorNum, worldSize, entities) {
-    const interactiveCount = 12 + Math.floor(Math.random() * 10);
+    entities.interactive = [];
+    
+    const rooms = entities.rooms || [];
+    const interactiveCount = 10 + Math.floor(Math.random() * 8);
+    
     for (let i = 0; i < interactiveCount; i++) {
         const typeRand = Math.random();
         let obj = {
-            x: 70 + Math.random() * (worldSize - 140),
-            y: 70 + Math.random() * (worldSize - 140),
             size: 26,
             used: false
         };
+        
+        // 방 안에 배치 (복도보다 방 내부 선호)
+        let pos;
+        if (rooms.length > 0 && Math.random() < 0.7) {
+            const room = rooms[Math.floor(Math.random() * rooms.length)];
+            pos = getSpawnPositionForRoom(room, 3);
+        } else {
+            pos = {
+                x: 70 + Math.random() * (worldSize - 140),
+                y: 70 + Math.random() * (worldSize - 140)
+            };
+        }
+        obj.x = pos.x;
+        obj.y = pos.y;
         
         if (typeRand < 0.4) {
             const trapTypes = ['spike', 'poison', 'slow'];
@@ -49,12 +62,32 @@ function spawnInteractiveObjects(floorNum, worldSize, entities) {
         entities.interactive.push(obj);
     }
     
+    // 보물 방 특별 상자
+    const treasureRoom = rooms.find(r => r.type === 'treasure');
+    if (treasureRoom) {
+        const pos = getSpawnPositionForRoom(treasureRoom, 3);
+        entities.interactive.push({
+            x: pos.x,
+            y: pos.y,
+            size: 30,
+            type: 'chest',
+            color: '#ffdd66',
+            icon: '💎',
+            used: false,
+            isTreasureChest: true // 특별 보상 플래그
+        });
+    }
+    
     // 숨겨진 방 (12% 확률, 3층부터)
     if (Math.random() < 0.12 && floorNum > 2) {
+        const secretRoom = rooms.find(r => r.type === 'secret');
+        const targetRoom = secretRoom || rooms[rooms.length - 1];
+        const pos = getSpawnPositionForRoom(targetRoom, 3);
+        
         entities.interactive.push({
-            x: worldSize - 250,
-            y: worldSize - 250,
-            size: 80,
+            x: pos.x,
+            y: pos.y,
+            size: 40,
             type: 'secret',
             color: '#ffaa44',
             icon: '🌟',
@@ -63,20 +96,32 @@ function spawnInteractiveObjects(floorNum, worldSize, entities) {
     }
 }
 
-// ========== 아이템 생성 ==========
+// ========== 아이템 생성 (방 기반 배치) ==========
 function spawnItems(worldSize, entities) {
-    const itemCount = 12 + Math.floor(Math.random() * 8);
+    entities.powerups = [];
+    
+    const rooms = entities.rooms || [];
+    const itemCount = 10 + Math.floor(Math.random() * 8);
     const itemTypes = ['code', 'heal', 'mana', 'elemental', 'pet_food'];
     const codeTexts = ['<JS/>', '{fn}', '=>', '</>', 'let', 'const'];
     
     for (let i = 0; i < itemCount; i++) {
         const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
         let item = {
-            x: 50 + Math.random() * (worldSize - 100),
-            y: 50 + Math.random() * (worldSize - 100),
             size: 18,
             type: type
         };
+        
+        // 방 안에 우선 배치
+        if (rooms.length > 0 && Math.random() < 0.8) {
+            const room = rooms[Math.floor(Math.random() * rooms.length)];
+            const pos = getSpawnPositionForRoom(room, 2);
+            item.x = pos.x;
+            item.y = pos.y;
+        } else {
+            item.x = 50 + Math.random() * (worldSize - 100);
+            item.y = 50 + Math.random() * (worldSize - 100);
+        }
         
         if (type === 'code') {
             item.codeText = codeTexts[Math.floor(Math.random() * codeTexts.length)];
@@ -101,7 +146,7 @@ function spawnItems(worldSize, entities) {
     }
 }
 
-// ========== 상호작용 처리 ==========
+// ========== 상호작용 처리 (보물 상자 특별 보상 추가) ==========
 function interactWithObject(obj, game, activeEffects, mana, maxMana) {
     if (obj.used) return { mana, consumed: false };
     
@@ -164,20 +209,29 @@ function interactWithObject(obj, game, activeEffects, mana, maxMana) {
         obj.used = true;
         obj.icon = '📦';
         
-        const rand = Math.random();
-        if (rand < 0.35) {
-            game.addScore(120);
-            showFloatingMessage("💰 120점 획득!", "#ffcc44");
-        } else if (rand < 0.6) {
-            const healAmount = 50;
-            game.player.hp = Math.min(game.player.maxHp, game.player.hp + healAmount);
-            showFloatingMessage(`🧪 회복 포션! +${healAmount} HP`, "#ff8888");
-        } else if (rand < 0.8) {
-            mana = Math.min(maxMana, mana + 40);
-            showFloatingMessage(`💙 마나 포션! +40 MP`, "#8888ff");
+        if (obj.isTreasureChest) {
+            // 보물 방 특별 보상
+            game.addScore(250);
+            game.player.hp = Math.min(game.player.maxHp, game.player.hp + 60);
+            mana = Math.min(maxMana, mana + 50);
+            game.player.attackDamage += 3;
+            showFloatingMessage("💎 보물 상자 발견! 대박 보상! 💎", "#ffdd44");
         } else {
-            game.addExp(50);
-            showFloatingMessage(`⭐ 경험치 50 획득!`, "#ffff88");
+            const rand = Math.random();
+            if (rand < 0.35) {
+                game.addScore(120);
+                showFloatingMessage("💰 120점 획득!", "#ffcc44");
+            } else if (rand < 0.6) {
+                const healAmount = 50;
+                game.player.hp = Math.min(game.player.maxHp, game.player.hp + healAmount);
+                showFloatingMessage(`🧪 회복 포션! +${healAmount} HP`, "#ff8888");
+            } else if (rand < 0.8) {
+                mana = Math.min(maxMana, mana + 40);
+                showFloatingMessage(`💙 마나 포션! +40 MP`, "#8888ff");
+            } else {
+                game.addExp(50);
+                showFloatingMessage(`⭐ 경험치 50 획득!`, "#ffff88");
+            }
         }
         return { mana, consumed: true };
     }

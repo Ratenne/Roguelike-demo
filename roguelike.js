@@ -33,7 +33,7 @@ canvas.addEventListener('mousemove', (e) => {
     mouseY = (e.clientY - rect.top) * scaleY;
 });
 
-// ========== 방 생성 ==========
+// ========== 방 생성 (BSP 던전 통합) ==========
 function generateFloor(floorNum) {
     const worldSize = 1800 + Math.min(400, Math.floor(floorNum / 10) * 50);
     game.worldWidth = worldSize;
@@ -43,15 +43,35 @@ function generateFloor(floorNum) {
     game.entities.powerups = [];
     game.entities.obstacles = [];
     game.entities.interactive = [];
+    game.entities.rooms = [];
+    game.entities.corridorTiles = [];
+    game.entities.wallDecorations = [];
     
-    // 각 모듈에서 생성 함수 호출
-    spawnObstacles(worldSize, game.entities);
+    // BSP + CA 던전 생성 (장애물 포함)
+    const dungeonData = generateDungeon(worldSize, worldSize, floorNum);
+    spawnObstaclesFromDungeon(game.entities, dungeonData);
+    
+    // 방 정보 기반 오브젝트/아이템 배치
     spawnInteractiveObjects(floorNum, worldSize, game.entities);
     spawnItems(worldSize, game.entities);
+    
+    // 적 생성 (방 안에 우선 배치)
     spawnEnemies(floorNum, worldSize, game.entities);
     spawnBoss(floorNum, worldSize, game.entities);
     
-    // 시간 제한 이벤트 (15% 확률, 2층부터)
+    // 시작 방에서 플레이어 시작
+    const startRoom = game.entities.rooms.find(r => r.type === 'start');
+    if (startRoom) {
+        game.player.x = startRoom.centerX;
+        game.player.y = startRoom.centerY;
+    } else {
+        game.player.x = worldSize / 2;
+        game.player.y = worldSize / 2;
+    }
+    game.player.vx = 0;
+    game.player.vy = 0;
+    
+    // 시간 제한 이벤트
     if (Math.random() < 0.15 && floorNum > 1) {
         timeEventActive = true;
         timeEventRemaining = 300;
@@ -60,11 +80,6 @@ function generateFloor(floorNum) {
     } else {
         timeEventActive = false;
     }
-    
-    game.player.x = worldSize / 2;
-    game.player.y = worldSize / 2;
-    game.player.vx = 0;
-    game.player.vy = 0;
     
     showFloatingMessage(`🏰 ${floorNum}층 - 입장!`, "#ffaa88");
 }
