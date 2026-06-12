@@ -115,7 +115,7 @@
 <div class="game-container">
     <canvas id="gameCanvas" width="1000" height="600"></canvas>
     <div class="controls">
-        🗡️ [WASD] 이동 | [스페이스] 공격 | 레벨업 시 스킬 선택 🗡️
+        🗡️ [WASD] 이동 | [스페이스] 공격 | [1~3] 특수 스킬 | [M] 음소거
         <button id="resetBtn">새로운 모험 시작</button>
     </div>
 </div>
@@ -134,7 +134,7 @@
     <button class="restart-btn" id="gameOverRestart">새로운 모험</button>
 </div>
 
-<!-- 모듈 파일들 (순서 중요!) -->
+<!-- 순서 중요: 의존성 순서대로 로드 -->
 <script src="engine.js"></script>
 <script src="audio.js"></script>
 <script src="effects.js"></script>
@@ -142,8 +142,8 @@
 <script src="items.js"></script>
 <script src="enemies.js"></script>
 <script src="character.js"></script>
-<script src="skills.js"></script>      <!-- mouseX/mouseY 선언 -->
+<script src="skills.js"></script>
 <script src="ui.js"></script>
-<script src="roguelike.js"></script>    <!-- 마지막: game 초기화 -->
+<script src="roguelike.js"></script>
 </body>
 </html>

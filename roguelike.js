@@ -1,5 +1,5 @@
 // ============================================
-// 로그라이크 게임 - 메인 로직
+// 로그라이크 게임 - 메인 로직 (soundEngine 안전 처리)
 // ============================================
 
 const game = new GameEngine('gameCanvas', {
@@ -26,8 +26,19 @@ let lastTimestamp = 0;
 let hasBossInFloor = false;
 let bossDefeated = false;
 
+// ========== 사운드 안전 래퍼 ==========
+// soundEngine이 아직 로드되지 않았을 경우를 대비한 폴백
+function safeSound(callback) {
+    if (typeof soundEngine !== 'undefined' && soundEngine) {
+        try {
+            callback(soundEngine);
+        } catch (e) {
+            console.warn('Sound effect failed:', e.message);
+        }
+    }
+}
+
 // 마우스 위치 추적
-// game.canvas가 존재하는지 확인 후 이벤트 등록
 if (game && game.canvas) {
     game.canvas.addEventListener('mousemove', (e) => {
         const rect = game.canvas.getBoundingClientRect();
@@ -36,11 +47,9 @@ if (game && game.canvas) {
         mouseX = (e.clientX - rect.left) * scaleX;
         mouseY = (e.clientY - rect.top) * scaleY;
     });
-} else {
-    console.warn('game.canvas is not available yet');
 }
 
-// ========== 방 생성 (BSP 던전 통합) ==========
+// ========== 방 생성 ==========
 function generateFloor(floorNum) {
     const worldSize = 1800 + Math.min(400, Math.floor(floorNum / 10) * 50);
     game.worldWidth = worldSize;
@@ -65,11 +74,14 @@ function generateFloor(floorNum) {
     hasBossInFloor = game.entities.enemies.some(e => e.type === 'boss');
     bossDefeated = false;
     
-    if (hasBossInFloor) {
-        soundEngine.startBossMusic();
-    } else {
-        soundEngine.startDungeonMusic();
-    }
+    // 보스전 음악 전환 (안전)
+    safeSound((se) => {
+        if (hasBossInFloor) {
+            se.startBossMusic();
+        } else {
+            se.startDungeonMusic();
+        }
+    });
     
     const startRoom = game.entities.rooms.find(r => r.type === 'start');
     if (startRoom) {
@@ -91,7 +103,7 @@ function generateFloor(floorNum) {
         timeEventActive = false;
     }
     
-    soundEngine.playFloorChange();
+    safeSound(se => se.playFloorChange());
     showFloatingMessage(`🏰 ${floorNum}층 - 입장!`, "#ffaa88");
 }
 
@@ -113,8 +125,12 @@ function goToNextFloor() {
 function gameOver() {
     if (!game.gameRunning) return;
     game.gameRunning = false;
-    soundEngine.playGameOver();
-    soundEngine.stopMusic();
+    
+    safeSound(se => {
+        se.playGameOver();
+        se.stopMusic();
+    });
+    
     document.getElementById('finalStats').innerHTML = 
         `최종 층: ${currentFloor} | 처치: ${game.player.killCount} | 점수: ${Math.floor(game.score)}`;
     document.getElementById('gameOverPanel').style.display = 'block';
@@ -145,7 +161,10 @@ function restartGame() {
     };
     currentPet = null;
     clearAllEnemyStates();
-    playerCharacter.resetDeath();
+    
+    if (typeof playerCharacter !== 'undefined' && playerCharacter) {
+        playerCharacter.resetDeath();
+    }
     
     game.player = {
         x: 0, y: 0, vx: 0, vy: 0,
@@ -161,7 +180,7 @@ function restartGame() {
     
     document.getElementById('gameOverPanel').style.display = 'none';
     
-    soundEngine.stopMusic();
+    safeSound(se => se.stopMusic());
     
     generateFloor(1);
     game.gameRunning = true;
@@ -231,10 +250,10 @@ game.on('onUpdate', (engine) => {
             const isCrit = Math.random() < passiveBonuses.criticalChance;
             if (isCrit) {
                 damage *= (1.5 + passiveBonuses.criticalDamage);
-                soundEngine.playCritical();
+                safeSound(se => se.playCritical());
                 showFloatingMessage(`💥 CRITICAL! ${Math.floor(damage)}`, "#ffaa44");
             } else {
-                soundEngine.playAttack();
+                safeSound(se => se.playAttack());
             }
             
             enemy.hp -= damage;
@@ -255,12 +274,14 @@ game.on('onUpdate', (engine) => {
                 engine.addScore(50);
                 
                 if (wasBoss) {
-                    soundEngine.playBossKill();
-                    soundEngine.playBossVictoryMusic();
+                    safeSound(se => {
+                        se.playBossKill();
+                        se.playBossVictoryMusic();
+                    });
                     bossDefeated = true;
                     showFloatingMessage(`👑 보스 처치!`, "#ffaa44");
                 } else {
-                    soundEngine.playEnemyKill();
+                    safeSound(se => se.playEnemyKill());
                 }
                 showFloatingMessage(`+${expGain} EXP`, "#88ff88");
             }
@@ -270,7 +291,7 @@ game.on('onUpdate', (engine) => {
     if (currentPet) {
         const result = currentPet.update(player, enemies);
         if (result.hit && result.target) {
-            soundEngine.playPetAttack();
+            safeSound(se => se.playPetAttack());
             
             if (result.target.hp <= 0) {
                 const idx = enemies.indexOf(result.target);
@@ -284,11 +305,13 @@ game.on('onUpdate', (engine) => {
                     game.addExp(expGain);
                     
                     if (wasBoss) {
-                        soundEngine.playBossKill();
-                        soundEngine.playBossVictoryMusic();
+                        safeSound(se => {
+                            se.playBossKill();
+                            se.playBossVictoryMusic();
+                        });
                         bossDefeated = true;
                     } else {
-                        soundEngine.playEnemyKill();
+                        safeSound(se => se.playEnemyKill());
                     }
                     showFloatingMessage(`🐾 ${Math.floor(result.damage)} 데미지!`, "#88ffaa");
                 }
@@ -308,12 +331,14 @@ game.on('onUpdate', (engine) => {
                 
                 if (result.consumed) {
                     if (obj.type === 'trap') {
-                        soundEngine.playTrap();
-                        soundEngine.playPlayerHit();
+                        safeSound(se => {
+                            se.playTrap();
+                            se.playPlayerHit();
+                        });
                     } else if (obj.type === 'chest' || obj.type === 'secret') {
-                        soundEngine.playChestOpen();
+                        safeSound(se => se.playChestOpen());
                     } else if (obj.type === 'shrine') {
-                        soundEngine.playHeal();
+                        safeSound(se => se.playHeal());
                     }
                 }
                 break;
@@ -329,7 +354,7 @@ game.on('onUpdate', (engine) => {
             const result = pickupItem(p, game, mana, maxMana);
             mana = result.mana;
             engine.entities.powerups.splice(i, 1);
-            soundEngine.playItemPickup();
+            safeSound(se => se.playItemPickup());
         }
     }
     
@@ -351,8 +376,12 @@ game.on('onRender', (engine) => {
     renderEffects(ctx, engine.camera);
     renderInteractiveObjects(ctx, engine.entities.interactive, engine);
     
-    for (let e of engine.entities.enemies) {
-        enemyRenderer.render(ctx, e, engine);
+    if (typeof enemyRenderer !== 'undefined') {
+        for (let e of engine.entities.enemies) {
+            enemyRenderer.render(ctx, e, engine);
+        }
+    } else {
+        renderEnemies(ctx, engine.entities.enemies, engine);
     }
     
     renderItems(ctx, engine.entities.powerups, engine);
@@ -368,7 +397,9 @@ game.on('onRender', (engine) => {
         ctx.fillText(`Lv.${currentPet.level}`, screen.x - 3, screen.y - 3);
     }
     
-    renderDungeonDecorations(ctx, engine, engine.entities.wallDecorations);
+    if (typeof renderDungeonDecorations === 'function') {
+        renderDungeonDecorations(ctx, engine, engine.entities.wallDecorations);
+    }
     
     drawSkillUI(ctx, engine, activeSkills, mana, maxMana, specialAttackCooldown);
     drawPetInfo(ctx, engine, currentPet);
@@ -382,13 +413,13 @@ game.on('onRender', (engine) => {
 });
 
 game.on('onLevelUp', (newLevel) => {
-    soundEngine.playLevelUp();
+    safeSound(se => se.playLevelUp());
     showFloatingMessage(`🎉 레벨 ${newLevel} 달성! 🎉`, "#ffaa44");
     showLevelUpMenu(game, availableSkills);
 });
 
 game.on('onPlayerDamage', (damage) => {
-    soundEngine.playPlayerHit();
+    safeSound(se => se.playPlayerHit());
     showFloatingMessage(`💔 -${damage} HP`, "#ff6666");
 });
 
@@ -403,32 +434,36 @@ window.addEventListener('keydown', (e) => {
         specialAttackCooldown = result.specialAttackCooldown;
         
         if (result.success) {
-            switch(skill.id) {
-                case 'FIREBALL': soundEngine.playFireball(); break;
-                case 'ICE_SHARD': soundEngine.playIceShard(); break;
-                case 'CHAIN_LIGHTNING': soundEngine.playLightning(); break;
-                case 'POISON_CLOUD': soundEngine.playPoisonCloud(); break;
-            }
+            safeSound(se => {
+                switch(skill.id) {
+                    case 'FIREBALL': se.playFireball(); break;
+                    case 'ICE_SHARD': se.playIceShard(); break;
+                    case 'CHAIN_LIGHTNING': se.playLightning(); break;
+                    case 'POISON_CLOUD': se.playPoisonCloud(); break;
+                }
+            });
         } else {
-            soundEngine.playManaLow();
+            safeSound(se => se.playManaLow());
         }
         e.preventDefault();
     }
     
     if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) {
-        const muted = soundEngine.toggleMute();
-        showFloatingMessage(muted ? '🔇 음소거' : '🔊 소리 켜짐', "#aaaaaa");
+        safeSound(se => {
+            const muted = se.toggleMute();
+            showFloatingMessage(muted ? '🔇 음소거' : '🔊 소리 켜짐', "#aaaaaa");
+        });
     }
 });
 
 // ========== 초기화 ==========
 
 document.addEventListener('click', () => {
-    soundEngine.resume();
+    safeSound(se => se.resume());
 }, { once: true });
 
 document.addEventListener('keydown', () => {
-    soundEngine.resume();
+    safeSound(se => se.resume());
 }, { once: true });
 
 // 게임 시작
@@ -437,10 +472,10 @@ game.start();
 
 // 리셋 버튼
 document.getElementById('resetBtn').addEventListener('click', () => {
-    soundEngine.playClick();
+    safeSound(se => se.playClick());
     restartGame();
 });
 document.getElementById('gameOverRestart').addEventListener('click', () => {
-    soundEngine.playClick();
+    safeSound(se => se.playClick());
     restartGame();
 });
