@@ -125,6 +125,9 @@ function restartGame() {
         attackSpeed: 10, attackCooldown: 0,
         moveSpeed: 4.5
     };
+
+    // 적 상태 초기화 추가
+    clearAllEnemyStates();
     
     document.getElementById('gameOverPanel').style.display = 'none';
     generateFloor(1);
@@ -134,6 +137,7 @@ function restartGame() {
 // ========== 엔진 콜백 등록 ==========
 
 // 업데이트 콜백
+// onUpdate 콜백 내 적 AI 부분 수정
 game.on('onUpdate', (engine) => {
     if (isLevelUpMenuOpen || !engine.gameRunning) return;
     
@@ -183,11 +187,12 @@ game.on('onUpdate', (engine) => {
         }
     }
     
-    // 적 AI
-    updateEnemyAI(player, enemies, engine.worldWidth, engine.worldHeight, engine);
+    // 적 AI (다양화된 버전)
+    updateEnemyAI(player, enemies, engine.worldWidth, engine.worldHeight, engine, deltaTime);
     
     if (player.hp <= 0) {
         gameOver();
+        return;
     }
     
     // 일반 공격
@@ -213,6 +218,7 @@ game.on('onUpdate', (engine) => {
             }
             
             if (enemy.hp <= 0) {
+                removeEnemyState(enemy);
                 engine.entities.enemies.splice(index, 1);
                 player.killCount++;
                 const expGain = Math.floor(enemy.exp * (1 + passiveBonuses.expBonus));
@@ -229,6 +235,7 @@ game.on('onUpdate', (engine) => {
         if (result.hit && result.target.hp <= 0) {
             const idx = enemies.indexOf(result.target);
             if (idx !== -1) {
+                removeEnemyState(result.target);
                 enemies.splice(idx, 1);
                 player.killCount++;
                 game.addExp(result.target.exp);
