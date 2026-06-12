@@ -272,24 +272,25 @@ class GameEngine {
         }
     }
     
+    // engine.js의 renderPlayer 함수 수정
     renderPlayer() {
-        const screen = this.worldToScreen(this.player.x - this.player.size/2, this.player.y - this.player.size/2);
-        this.ctx.shadowBlur = 12;
-        
-        if (this.player.invincibleFrames > 0 && (Math.floor(Date.now() / 50) % 3 === 0)) {
-            this.ctx.fillStyle = "#ffaaaa";
+        if (typeof playerCharacter !== 'undefined') {
+            playerCharacter.render(this.ctx, this.player, this, this.gameRunning);
         } else {
-            this.ctx.fillStyle = "#ffaa77";
+            // 폴백
+            const screen = this.worldToScreen(this.player.x - this.player.size/2, this.player.y - this.player.size/2);
+            this.ctx.shadowBlur = 12;
+            this.ctx.fillStyle = this.player.invincibleFrames > 0 && (Math.floor(Date.now() / 50) % 3 === 0) 
+                ? "#ffaaaa" : "#ffaa77";
+            this.ctx.fillRect(screen.x, screen.y, this.player.size, this.player.size);
+            this.ctx.fillStyle = "#aa6644";
+            this.ctx.fillRect(screen.x+4, screen.y-6, 6, 8);
+            this.ctx.fillStyle = "white";
+            this.ctx.fillRect(screen.x+16, screen.y+12, 5, 6);
+            this.ctx.fillStyle = "#2d2d2d";
+            this.ctx.fillRect(screen.x+6, screen.y+18, 5, 5);
+            this.ctx.shadowBlur = 0;
         }
-        
-        this.ctx.fillRect(screen.x, screen.y, this.player.size, this.player.size);
-        this.ctx.fillStyle = "#aa6644";
-        this.ctx.fillRect(screen.x+4, screen.y-6, 6, 8);
-        this.ctx.fillStyle = "white";
-        this.ctx.fillRect(screen.x+16, screen.y+12, 5, 6);
-        this.ctx.fillStyle = "#2d2d2d";
-        this.ctx.fillRect(screen.x+6, screen.y+18, 5, 5);
-        this.ctx.shadowBlur = 0;
     }
     
     renderUI() {

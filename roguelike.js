@@ -349,6 +349,14 @@ game.on('onRender', (engine) => {
     
     renderEffects(ctx, engine.camera);
     renderInteractiveObjects(ctx, engine.entities.interactive, engine);
+    
+    // 적 렌더링 (새 스프라이트 시스템 사용)
+    for (let e of engine.entities.enemies) {
+        enemyRenderer.render(ctx, e, engine);
+    }
+    
+    renderEffects(ctx, engine.camera);
+    renderInteractiveObjects(ctx, engine.entities.interactive, engine);
     renderEnemies(ctx, engine.entities.enemies, engine);
     renderItems(ctx, engine.entities.powerups, engine);
     drawMouseDirection(ctx, engine, game, mouseX, mouseY);
