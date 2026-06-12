@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>로그라이크 던전 - 코드 서바이버</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a1a, #1a0a2a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+        }
+
+        canvas {
+            display: block;
+            box-shadow: 0 0 40px rgba(255, 100, 200, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .controls {
+            color: #ff88cc;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-size: 12px;
+            backdrop-filter: blur(4px);
+            text-align: center;
+        }
+
+        button {
+            background: #ff4488;
+            border: none;
+            color: white;
+            font-family: monospace;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 30px;
+            margin-left: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #ff66aa;
+            transform: scale(1.02);
+        }
+        
+        .status-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 12px 18px;
+            border-radius: 15px;
+            color: #ffaa44;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+            border-right: 3px solid #ff4488;
+            text-align: right;
+            z-index: 10;
+        }
+        
+        .game-over-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+            border: 2px solid #ff4488;
+        }
+        
+        .game-over-panel h1 {
+            color: #ff6688;
+            margin-bottom: 20px;
+        }
+        
+        .game-over-panel p {
+            color: #ccccff;
+            margin-bottom: 10px;
+        }
+        
+        .restart-btn {
+            background: #ff4488;
+            margin-top: 20px;
+            padding: 10px 30px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="gameCanvas" width="1000" height="600"></canvas>
+    <div class="controls">
+        🗡️ [WASD] 이동 | [스페이스] 공격 | 레벨업 시 스킬 선택 🗡️
+        <button id="resetBtn">새로운 모험 시작</button>
+    </div>
+</div>
+<div class="status-panel" id="statusPanel">
+    ❤️ 100/100<br>
+    ⚡ LV.1 (0/100)<br>
+    🗡️ 공격력 15<br>
+    🛡️ 방어력 5<br>
+    💀 처치 0<br>
+    🏆 층 1
+</div>
+<div class="game-over-panel" id="gameOverPanel">
+    <h1>💀 GAME OVER 💀</h1>
+    <p>당신은 던전 깊은 곳에서 최후를 맞이했습니다...</p>
+    <p id="finalStats">최종 층: 1 | 처치: 0 | 점수: 0</p>
+    <button class="restart-btn" id="gameOverRestart">새로운 모험</button>
+</div>
+
+<script src="engine.js"></script>
+<script src="roguelike.js"></script>
+</body>
+</html>
