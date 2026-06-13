@@ -1,5 +1,5 @@
 // ============================================
-// 벡터 그래픽 캐릭터 & 애니메이션 시스템
+// 벡터 그래픽 캐릭터 & 애니메이션 시스템 (수정)
 // ============================================
 
 // ========== 이징 함수 ==========
@@ -17,27 +17,48 @@ const Easing = {
         Math.pow(2, -10 * t) * Math.sin((t - 0.1) * 5 * Math.PI) + 1
 };
 
-// ========== 벡터 유틸리티 ==========
+// ========== 벡터 유틸리티 (방어적 코드) ==========
 class VectorDraw {
     constructor(ctx) {
         this.ctx = ctx;
     }
     
-    // 그라데이션 생성
+    // 그라데이션 생성 (안전 검사 포함)
     linearGradient(x1, y1, x2, y2, stops) {
-        const grad = this.ctx.createLinearGradient(x1, y1, x2, y2);
-        for (let stop of stops) {
-            grad.addColorStop(stop.pos, stop.color);
+        if (!Array.isArray(stops) || stops.length === 0) {
+            // 폴백: 단색 반환
+            return '#888888';
         }
-        return grad;
+        try {
+            const grad = this.ctx.createLinearGradient(x1, y1, x2, y2);
+            for (let stop of stops) {
+                if (stop && typeof stop.pos === 'number' && stop.color) {
+                    grad.addColorStop(stop.pos, stop.color);
+                }
+            }
+            return grad;
+        } catch (e) {
+            console.warn('linearGradient failed:', e.message);
+            return stops[0]?.color || '#888888';
+        }
     }
     
     radialGradient(x, y, r1, r2, stops) {
-        const grad = this.ctx.createRadialGradient(x, y, r1, x, y, r2);
-        for (let stop of stops) {
-            grad.addColorStop(stop.pos, stop.color);
+        if (!Array.isArray(stops) || stops.length === 0) {
+            return '#888888';
         }
-        return grad;
+        try {
+            const grad = this.ctx.createRadialGradient(x, y, r1, x, y, r2);
+            for (let stop of stops) {
+                if (stop && typeof stop.pos === 'number' && stop.color) {
+                    grad.addColorStop(stop.pos, stop.color);
+                }
+            }
+            return grad;
+        } catch (e) {
+            console.warn('radialGradient failed:', e.message);
+            return stops[0]?.color || '#888888';
+        }
     }
     
     // 둥근 사각형
@@ -53,16 +74,6 @@ class VectorDraw {
         this.ctx.lineTo(x, y + r);
         this.ctx.quadraticCurveTo(x, y, x + r, y);
         this.ctx.closePath();
-    }
-    
-    // 광택 효과
-    gloss(x, y, w, h, alpha = 0.3) {
-        const grad = this.linearGradient(x, y, x, y + h, [
-            { pos: 0, color: `rgba(255,255,255,${alpha})` },
-            { pos: 0.5, color: `rgba(255,255,255,0)` },
-            { pos: 1, color: `rgba(0,0,0,${alpha * 0.5})` }
-        ]);
-        return grad;
     }
     
     // 그림자
@@ -81,7 +92,7 @@ class VectorDraw {
     }
 }
 
-// ========== 플레이어 캐릭터 (벡터 스타일) ==========
+// ========== 플레이어 캐릭터 ==========
 class PlayerCharacter {
     constructor() {
         this.state = 'idle';
@@ -91,16 +102,13 @@ class PlayerCharacter {
         this.animProgress = 0;
         this.renderSize = 56;
         
-        // 부드러운 애니메이션
         this.breathAnim = 0;
         this.idleSway = 0;
         this.walkBob = 0;
         this.attackArc = 0;
         
-        // 파티클
         this.particles = [];
         
-        // 색상
         this.colors = {
             skin: '#f5d0b0',
             skinShadow: '#d4a574',
@@ -147,20 +155,16 @@ class PlayerCharacter {
         ctx.translate(cx, cy);
         ctx.scale(s, s);
         
-        // 좌우 반전
         if (this.direction === 'left') ctx.scale(-1, 1);
         
-        // 사망 처리
         if (this.state === 'die') {
             const deathProgress = this.deathTimer / this.deathDuration;
             ctx.globalAlpha = 1 - deathProgress * 0.8;
             ctx.translate(0, deathProgress * 30);
         }
         
-        // 깜빡임
         if (!this.visible) ctx.globalAlpha = 0.4;
         
-        // 그림자
         vd.shadow('rgba(0,0,0,0.35)', 10, 2, 3);
         
         this._drawCharacter(vd);
@@ -168,7 +172,6 @@ class PlayerCharacter {
         vd.clearShadow();
         ctx.restore();
         
-        // 파티클
         this._updateParticles(ctx, screen, s);
     }
     
@@ -187,7 +190,6 @@ class PlayerCharacter {
             this.state = 'attack';
             this.frame = 0;
             this.attackArc = 0;
-            // 파티클 생성
             this._spawnAttackParticles();
         } else if (Math.abs(player.vx) > 0.3 || Math.abs(player.vy) > 0.3) {
             this.state = 'walk';
@@ -204,8 +206,6 @@ class PlayerCharacter {
     _updateAnimation() {
         const dt = 0.016;
         this.frameTimer += dt;
-        
-        // 호흡 애니메이션 (항상)
         this.breathAnim += dt * 1.5;
         
         switch(this.state) {
@@ -241,15 +241,12 @@ class PlayerCharacter {
     
     _drawCharacter(vd) {
         const ctx = vd.ctx;
-        const c = this.colors;
         
         ctx.save();
-        
-        // 걸을 때 바운스
         ctx.translate(0, this.walkBob * 20);
         ctx.rotate(this.idleSway);
         
-        // === 그림자 (바닥) ===
+        // 바닥 그림자
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(0, 20, 14, 4, 0, 0, Math.PI * 2);
@@ -275,7 +272,6 @@ class PlayerCharacter {
             { pos: 1, color: '#4a3a2a' }
         ]);
         
-        // 왼쪽 다리
         ctx.fillStyle = pantsGrad;
         ctx.beginPath();
         ctx.moveTo(-5, 10);
@@ -285,7 +281,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 오른쪽 다리
         ctx.beginPath();
         ctx.moveTo(2, 10);
         ctx.lineTo(5, 18);
@@ -307,7 +302,6 @@ class PlayerCharacter {
         vd.roundRect(1, 17, 8, 5, 2);
         ctx.fill();
         
-        // 부츠 광택
         ctx.fillStyle = 'rgba(255,255,255,0.15)';
         vd.roundRect(-8, 18, 3, 2, 1);
         ctx.fill();
@@ -319,7 +313,6 @@ class PlayerCharacter {
         const ctx = vd.ctx;
         const c = this.colors;
         
-        // 갑옷 본체
         const armorGrad = vd.linearGradient(-7, 0, 7, 0, [
             { pos: 0, color: c.armorDark },
             { pos: 0.3, color: c.armor },
@@ -339,7 +332,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 갑옷 중앙선
         ctx.strokeStyle = c.armorTrim;
         ctx.lineWidth = 0.8;
         ctx.beginPath();
@@ -347,7 +339,6 @@ class PlayerCharacter {
         ctx.lineTo(0, 11);
         ctx.stroke();
         
-        // 갑옷 가슴 장식
         ctx.fillStyle = c.armorTrim;
         ctx.beginPath();
         ctx.moveTo(-4, 1);
@@ -358,12 +349,10 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 벨트
         ctx.fillStyle = c.beltBrown;
         vd.roundRect(-7, 10, 14, 3, 1);
         ctx.fill();
         
-        // 벨트 버클
         ctx.fillStyle = c.beltGold;
         ctx.beginPath();
         ctx.arc(0, 11.5, 2.5, 0, Math.PI * 2);
@@ -373,7 +362,6 @@ class PlayerCharacter {
         ctx.arc(0, 11.5, 1.2, 0, Math.PI * 2);
         ctx.fill();
         
-        // 광택
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
         ctx.beginPath();
         ctx.ellipse(-2, 2, 3, 6, -0.3, 0, Math.PI * 2);
@@ -386,7 +374,6 @@ class PlayerCharacter {
         
         ctx.save();
         
-        // 망토 (뒤쪽)
         const capeGrad = vd.linearGradient(-8, 0, 0, 15, [
             { pos: 0, color: c.capeLight },
             { pos: 1, color: c.cape }
@@ -401,7 +388,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 망토 주름
         ctx.strokeStyle = 'rgba(0,0,0,0.15)';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
@@ -413,13 +399,7 @@ class PlayerCharacter {
     }
     
     _drawArms(vd) {
-        const ctx = vd.ctx;
-        const c = this.colors;
-        
-        // 왼팔 (뒤)
         this._drawSingleArm(vd, -7, 1, -10, 8, -6, 10);
-        
-        // 오른팔 (앞, 무기 든 손)
         this._drawSingleArm(vd, 7, 1, 12, 6, 8, 9);
     }
     
@@ -441,7 +421,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 손
         ctx.fillStyle = c.skin;
         ctx.beginPath();
         ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
@@ -512,7 +491,6 @@ class PlayerCharacter {
         ctx.ellipse(3, -5, 2.5, 2, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // 눈동자
         const eyeDX = this.direction === 'right' ? 0.5 : this.direction === 'left' ? -0.5 : 0;
         const eyeDY = this.direction === 'up' ? -0.3 : this.direction === 'down' ? 0.3 : 0;
         
@@ -565,8 +543,6 @@ class PlayerCharacter {
         const c = this.colors;
         
         ctx.save();
-        
-        // 오른손 위치
         ctx.translate(8, 9);
         
         if (this.state === 'attack') {
@@ -575,7 +551,6 @@ class PlayerCharacter {
             ctx.rotate(-0.4);
         }
         
-        // 검날
         const bladeGrad = vd.linearGradient(0, -2, 0, 2, [
             { pos: 0, color: c.swordEdge },
             { pos: 0.3, color: c.swordBlade },
@@ -593,7 +568,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 검 끝
         ctx.fillStyle = c.swordEdge;
         ctx.beginPath();
         ctx.moveTo(18, -0.5);
@@ -602,7 +576,6 @@ class PlayerCharacter {
         ctx.closePath();
         ctx.fill();
         
-        // 가드
         const guardGrad = vd.linearGradient(0, -3, 0, 3, [
             { pos: 0, color: '#ffe066' },
             { pos: 0.5, color: c.swordGuard },
@@ -613,12 +586,10 @@ class PlayerCharacter {
         vd.roundRect(1, -3, 4, 6, 1);
         ctx.fill();
         
-        // 손잡이
         ctx.fillStyle = c.swordHandle;
         vd.roundRect(-3, -2, 5, 4, 0.8);
         ctx.fill();
         
-        // 손잡이 감기
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         ctx.lineWidth = 0.3;
         for (let i = 0; i < 4; i++) {
@@ -631,7 +602,6 @@ class PlayerCharacter {
         ctx.restore();
     }
     
-    // 파티클
     _spawnAttackParticles() {
         for (let i = 0; i < 8; i++) {
             this.particles.push({
@@ -640,7 +610,7 @@ class PlayerCharacter {
                 vy: (Math.random() - 0.5) * 4 - 2,
                 life: 0.4 + Math.random() * 0.3,
                 size: 1 + Math.random() * 2,
-                color: `hsl(${40 + Math.random() * 20}, 100%, ${60 + Math.random() * 40}%)`
+                color: `hsla(${40 + Math.random() * 20}, 100%, ${60 + Math.random() * 40}%, `
             });
         }
     }
@@ -651,7 +621,7 @@ class PlayerCharacter {
             const p = this.particles[i];
             p.x += p.vx;
             p.y += p.vy;
-            p.vy += 0.1; // 중력
+            p.vy += 0.1;
             p.life -= dt;
             
             if (p.life <= 0) {
@@ -660,7 +630,7 @@ class PlayerCharacter {
             }
             
             const alpha = p.life / 0.7;
-            ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('hsl', 'hsla');
+            ctx.fillStyle = p.color + alpha + ')';
             ctx.beginPath();
             ctx.arc(screen.x + this.renderSize/2 + p.x * scale, 
                     screen.y + this.renderSize/2 + p.y * scale, 
@@ -677,7 +647,7 @@ class PlayerCharacter {
     }
 }
 
-// ========== 적 벡터 렌더러 ==========
+// ========== 적 벡터 렌더러 (수정) ==========
 class EnemyRenderer {
     constructor() {
         this.palettes = {
@@ -735,10 +705,11 @@ class EnemyRenderer {
         ctx.translate(cx, cy + bob);
         ctx.scale(s, s);
         
-        // 그림자
         vd.shadow('rgba(0,0,0,0.3)', 6, 1, 2);
         
-        switch(enemy.aiType) {
+        // AI 타입에 따라 다른 그리기 함수 호출
+        const aiType = enemy.aiType || 'chase';
+        switch(aiType) {
             case 'ranged': this._drawRanged(vd, enemy, palette); break;
             case 'coward': this._drawCoward(vd, enemy, palette); break;
             case 'berserker': this._drawBerserker(vd, enemy, palette); break;
@@ -753,11 +724,11 @@ class EnemyRenderer {
     _drawBasic(vd, enemy, p) {
         const ctx = vd.ctx;
         
-        // 몸체
+        // 안전한 radialGradient 호출
         const bodyGrad = vd.radialGradient(0, 0, 2, 0, 0, 14, [
-            { pos: 0, color: p.body[1] },
-            { pos: 0.7, color: p.body[0] },
-            { pos: 1, color: p.body[2] }
+            { pos: 0, color: (p.body && p.body[1]) || '#aaaaaa' },
+            { pos: 0.7, color: (p.body && p.body[0]) || '#888888' },
+            { pos: 1, color: (p.body && p.body[2]) || '#cccccc' }
         ]);
         
         ctx.fillStyle = bodyGrad;
@@ -780,7 +751,7 @@ class EnemyRenderer {
         ctx.ellipse(4, -3, 3, 3.5, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.fillStyle = p.eye;
+        ctx.fillStyle = p.eye || '#ffffff';
         ctx.beginPath();
         ctx.arc(-4, -2.5, 1.5, 0, Math.PI * 2);
         ctx.fill();
@@ -799,11 +770,10 @@ class EnemyRenderer {
     _drawRanged(vd, enemy, p) {
         const ctx = vd.ctx;
         
-        // 마름모 몸체
         const bodyGrad = vd.linearGradient(-8, 0, 8, 0, [
-            { pos: 0, color: p.body[0] },
-            { pos: 0.5, color: p.body[1] },
-            { pos: 1, color: p.body[2] }
+            { pos: 0, color: (p.body && p.body[0]) || '#888888' },
+            { pos: 0.5, color: (p.body && p.body[1]) || '#aaaaaa' },
+            { pos: 1, color: (p.body && p.body[2]) || '#cccccc' }
         ]);
         
         ctx.fillStyle = bodyGrad;
@@ -815,7 +785,6 @@ class EnemyRenderer {
         ctx.closePath();
         ctx.fill();
         
-        // 눈
         ctx.fillStyle = '#ff0000';
         ctx.beginPath();
         ctx.arc(-3, -2, 2, 0, Math.PI * 2);
@@ -828,10 +797,9 @@ class EnemyRenderer {
     _drawCoward(vd, enemy, p) {
         const ctx = vd.ctx;
         
-        // 도망형 - 작은 삼각형 몸체
         const bodyGrad = vd.linearGradient(-8, 10, 0, -12, [
-            { pos: 0, color: p.body[1] },
-            { pos: 1, color: p.body[0] }
+            { pos: 0, color: (p.body && p.body[1]) || '#aaaaaa' },
+            { pos: 1, color: (p.body && p.body[0]) || '#888888' }
         ]);
         
         ctx.fillStyle = bodyGrad;
@@ -842,7 +810,6 @@ class EnemyRenderer {
         ctx.closePath();
         ctx.fill();
         
-        // 큰 눈 (겁먹은)
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.ellipse(-3, -2, 3, 4, 0, 0, Math.PI * 2);
@@ -863,10 +830,9 @@ class EnemyRenderer {
     _drawBerserker(vd, enemy, p) {
         const ctx = vd.ctx;
         
-        // 큰 몸체 + 뿔
         const bodyGrad = vd.radialGradient(0, 0, 3, 0, 0, 15, [
-            { pos: 0, color: p.body[1] },
-            { pos: 0.8, color: p.body[0] },
+            { pos: 0, color: (p.body && p.body[1]) || '#aaaaaa' },
+            { pos: 0.8, color: (p.body && p.body[0]) || '#888888' },
             { pos: 1, color: '#220000' }
         ]);
         
@@ -876,7 +842,7 @@ class EnemyRenderer {
         ctx.fill();
         
         // 뿔
-        ctx.fillStyle = p.body[0];
+        ctx.fillStyle = (p.body && p.body[0]) || '#888888';
         ctx.beginPath();
         ctx.moveTo(-5, -10);
         ctx.lineTo(-10, -18);
@@ -897,7 +863,6 @@ class EnemyRenderer {
             ctx.stroke();
         }
         
-        // 분노한 눈
         ctx.fillStyle = '#ff0000';
         ctx.beginPath();
         ctx.ellipse(-4, -3, 2, 3, -0.2, 0, Math.PI * 2);
@@ -910,11 +875,11 @@ class EnemyRenderer {
     _drawPatrol(vd, enemy, p) {
         const ctx = vd.ctx;
         
-        // 타원형 몸체 (거미류)
+        // 수정: 올바른 인자 순서로 radialGradient 호출
         const bodyGrad = vd.radialGradient(0, 0, 2, 0, 0, 11, [
-            { pos: 0, color: p.body[1] },
-            { pos: 0.7, color: p.body[0] },
-            { pos: 1, color: p.body[2] }
+            { pos: 0, color: (p.body && p.body[1]) || '#aaaaaa' },
+            { pos: 0.7, color: (p.body && p.body[0]) || '#888888' },
+            { pos: 1, color: (p.body && p.body[2]) || '#cccccc' }
         ]);
         
         ctx.fillStyle = bodyGrad;
@@ -923,18 +888,21 @@ class EnemyRenderer {
         ctx.fill();
         
         // 다리
-        ctx.strokeStyle = p.body[0];
+        ctx.strokeStyle = (p.body && p.body[0]) || '#888888';
         ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
+        const bobOffset = enemy.bobOffset || 0;
         for (let i = 0; i < 4; i++) {
-            const angle = Math.sin(enemy.bobOffset * 3 + i) * 0.4;
+            const angle = Math.sin(bobOffset * 3 + i) * 0.4;
+            // 왼쪽 다리 (아래)
             ctx.beginPath();
-            ctx.moveTo(-8 + i * 4, 5);
-            ctx.quadraticCurveTo(-8 + i * 4 + angle * 5, 8, -8 + i * 4, 12);
+            ctx.moveTo(-10 + i * 5, 5);
+            ctx.quadraticCurveTo(-10 + i * 5 + angle * 5, 9, -10 + i * 5, 13);
             ctx.stroke();
+            // 왼쪽 다리 (위)
             ctx.beginPath();
-            ctx.moveTo(-8 + i * 4, -5);
-            ctx.quadraticCurveTo(-8 + i * 4 + angle * 5, -8, -8 + i * 4, -12);
+            ctx.moveTo(-10 + i * 5, -5);
+            ctx.quadraticCurveTo(-10 + i * 5 + angle * 5, -9, -10 + i * 5, -13);
             ctx.stroke();
         }
     }
