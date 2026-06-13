@@ -4,16 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>로그라이크 던전 - 코드 서바이버</title>
-   <!-- 파비콘 404 방지 (인라인 SVG) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🗡️</text></svg>">    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🗡️</text></svg>">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            user-select: none;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
         body {
             background: linear-gradient(135deg, #0a0a1a, #1a0a2a);
             min-height: 100vh;
@@ -22,7 +15,6 @@
             align-items: center;
             font-family: 'Courier New', monospace;
         }
-
         .game-container {
             display: flex;
             flex-direction: column;
@@ -30,14 +22,12 @@
             gap: 12px;
             padding: 20px;
         }
-
         canvas {
             display: block;
             box-shadow: 0 0 40px rgba(255, 100, 200, 0.3);
             border-radius: 20px;
             cursor: pointer;
         }
-
         .controls {
             color: #ff88cc;
             background: rgba(0,0,0,0.7);
@@ -47,7 +37,6 @@
             backdrop-filter: blur(4px);
             text-align: center;
         }
-
         button {
             background: #ff4488;
             border: none;
@@ -60,11 +49,7 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        button:hover {
-            background: #ff66aa;
-            transform: scale(1.02);
-        }
-        
+        button:hover { background: #ff66aa; transform: scale(1.02); }
         .status-panel {
             position: fixed;
             top: 20px;
@@ -80,7 +65,6 @@
             text-align: right;
             z-index: 10;
         }
-        
         .game-over-panel {
             position: fixed;
             top: 50%;
@@ -94,23 +78,9 @@
             display: none;
             border: 2px solid #ff4488;
         }
-        
-        .game-over-panel h1 {
-            color: #ff6688;
-            margin-bottom: 20px;
-        }
-        
-        .game-over-panel p {
-            color: #ccccff;
-            margin-bottom: 10px;
-        }
-        
-        .restart-btn {
-            background: #ff4488;
-            margin-top: 20px;
-            padding: 10px 30px;
-            font-size: 16px;
-        }
+        .game-over-panel h1 { color: #ff6688; margin-bottom: 20px; }
+        .game-over-panel p { color: #ccccff; margin-bottom: 10px; }
+        .restart-btn { background: #ff4488; margin-top: 20px; padding: 10px 30px; font-size: 16px; }
     </style>
 </head>
 <body>
@@ -136,7 +106,7 @@
     <button class="restart-btn" id="gameOverRestart">새로운 모험</button>
 </div>
 
-<!-- 순서 중요: 의존성 순서대로 로드 -->
+<!-- 순서 중요: 의존성 순서대로 -->
 <script src="engine.js"></script>
 <script src="audio.js"></script>
 <script src="effects.js"></script>

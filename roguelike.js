@@ -370,12 +370,25 @@ game.on('onUpdate', (engine) => {
     }
 });
 
+// roguelike.js - onRender 콜백 (중복 제거, 올바른 순서)
 game.on('onRender', (engine) => {
     const ctx = engine.ctx;
     
+    // 1. 이펙트 렌더링 (가장 아래)
     renderEffects(ctx, engine.camera);
+    
+    // 2. 던전 장식 렌더링
+    if (typeof renderDungeonDecorations === 'function') {
+        renderDungeonDecorations(ctx, engine, engine.entities.wallDecorations);
+    }
+    
+    // 3. 상호작용 오브젝트 렌더링
     renderInteractiveObjects(ctx, engine.entities.interactive, engine);
     
+    // 4. 아이템 렌더링
+    renderItems(ctx, engine.entities.powerups, engine);
+    
+    // 5. 적 렌더링
     if (typeof enemyRenderer !== 'undefined') {
         for (let e of engine.entities.enemies) {
             enemyRenderer.render(ctx, e, engine);
@@ -384,9 +397,7 @@ game.on('onRender', (engine) => {
         renderEnemies(ctx, engine.entities.enemies, engine);
     }
     
-    renderItems(ctx, engine.entities.powerups, engine);
-    drawMouseDirection(ctx, engine, game, mouseX, mouseY);
-    
+    // 6. 펫 렌더링
     if (currentPet) {
         const screen = engine.worldToScreen(currentPet.x, currentPet.y);
         ctx.font = "26px monospace";
@@ -397,10 +408,10 @@ game.on('onRender', (engine) => {
         ctx.fillText(`Lv.${currentPet.level}`, screen.x - 3, screen.y - 3);
     }
     
-    if (typeof renderDungeonDecorations === 'function') {
-        renderDungeonDecorations(ctx, engine, engine.entities.wallDecorations);
-    }
+    // 7. 마우스 방향선
+    drawMouseDirection(ctx, engine, game, mouseX, mouseY);
     
+    // 8. UI 렌더링 (가장 위)
     drawSkillUI(ctx, engine, activeSkills, mana, maxMana, specialAttackCooldown);
     drawPetInfo(ctx, engine, currentPet);
     drawActiveEffects(ctx, engine, activeEffects);
